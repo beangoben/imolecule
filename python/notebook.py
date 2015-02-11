@@ -48,7 +48,7 @@ def draw(data, format="auto", size=(400, 300), drawing_type="ball and stick",
     try:
         from IPython.html.nbextensions import install_nbextension
         install_nbextension([os.path.join(file_path,
-                             "js/build", filename)], verbose=0)
+                                          "js/build", filename)], verbose=0)
     except:
         pass
 
@@ -81,6 +81,98 @@ def draw(data, format="auto", size=(400, 300), drawing_type="ball and stick",
 
     # Execute js and display the results in a div (see script for more)
     display(HTML(html))
+
+
+def drawMany(data, format="auto", size=(400, 300),
+             drawing_type="ball and stick",
+             camera_type="perspective", shader="toon", labels="None"):
+    """Draws an interactive 3D visualization of many inputted chemical.
+
+    Args:
+        data: A list of strings and/or files representing chemicals.
+        format: The format of the `data` variable (default is "auto").
+        size: Starting dimensions of visualization, in pixels.
+        drawing_type: Specifies the molecular representation. Can be "ball and
+            stick", "wireframe", or "space filling".
+        camera_type: Can be "perspective" or "orthographic".
+        shader: Specifies shading algorithm to use. Can be "toon", "basic",
+            "phong", or "lambert".
+        labels: A list of strings that specifies the name of each chemical, if
+            none if given, nothing is labeled.
+
+    The `format` can be any value specified by Open Babel
+    (http://openbabel.org/docs/2.3.1/FileFormats/Overview.html). The "auto"
+    option uses the extension for files (ie. my_file.mol -> mol) and defaults
+    to SMILES (smi) for strings.
+    """
+    # Catch errors on string-based input before getting js involved
+    draw_options = ["ball and stick", "wireframe", "space filling"]
+    camera_options = ["perspective", "orthographic"]
+    shader_options = ["toon", "basic", "phong", "lambert"]
+
+    if drawing_type not in draw_options:
+        raise Exception("Invalid drawing type! Please use one of: "
+                        + ", ".join(draw_options))
+    if camera_type not in camera_options:
+        raise Exception("Invalid camera type! Please use one of: "
+                        + ", ".join(camera_options))
+    if shader not in shader_options:
+        raise Exception("Invalid shader! Please use one of: "
+                        + ", ".join(shader_options))
+    if labels == 'None':
+        labels = [[] for i in data]
+
+    if len(labels) != len(data):
+        raise Exception(
+            "Invalid labels! Please give a list of labels for each molecule"
+            + ", len equal to the size for data! ")
+    # Try using IPython >=2.0 to install js locally
+    try:
+        from IPython.html.nbextensions import install_nbextension
+        install_nbextension([os.path.join(file_path,
+                                          "js/build", filename)], verbose=0)
+    except:
+        pass
+    html_code = ""
+    for indx, datum in enumerate(data):
+        label = labels[indx]
+        json_mol = generate(datum, format)
+        div_id = uuid.uuid4()
+        html = """<div id="molecule_%s" style="float:left"> """ % (div_id)
+        if label:
+            html = html + \
+                """<div style="text-align:center"> <b> %s </b> </div>""" % (
+                    label)
+
+        html = html + """ <script type="text/javascript">
+               require.config({baseUrl: "/",
+                                 paths: {imolecule: ['%s', '%s']}});
+               require(['imolecule'], function () {
+                   var $d = $('#molecule_%s');
+                   $d.width(%d); $d.height(%d);
+                   $d.imolecule = jQuery.extend({}, imolecule);
+                   $d.imolecule.create($d, {drawingType: '%s',
+                                            cameraType: '%s',
+                                            shader: '%s'
+                                            });
+                   $d.imolecule.draw(%s);
+
+                   $d.resizable({
+                       aspectRatio: %d / %d,
+                       resize: function (evt, ui) {
+                           $d.imolecule.renderer.setSize(ui.size.width,
+                                                         ui.size.height);
+                       }
+                   });
+               });
+               </script></div>""" % (local_path[:-3], remote_path[:-3],
+                                     div_id, size[0], size[1], drawing_type,
+                                     camera_type, shader,
+                                     json_mol, size[0], size[1])
+        html_code = html_code + html
+    # Execute js and display the results in a div (see script for more)
+    display(HTML(html_code))
+    return
 
 
 def generate(data, format="auto"):
